@@ -2,6 +2,9 @@ import sys
 import ROOT as r 
 r.gStyle.SetOptStat(0)
 
+r.gROOT.ProcessLine(".L statsCalc.h+");
+from ROOT import calculateExpectedSignificance 
+
 fi = r.TFile.Open(sys.argv[1])
 di = fi #.Get("mjw_1jet")
 
@@ -43,7 +46,8 @@ for ic,config in enumerate(configs) :
  totalbkg = 0; totalc=0
  print "Nevents ", data.GetName(), data.Integral("width")
 
- for bkg in x.key_order:
+ totalbackground = 0
+ for bkgtype_i,bkg in enumerate(x.key_order):
   nullhist = 0; nullc = 0
   for thist in x.backgrounds[bkg][0]:
     tmp = di.Get(x.directory+"/"+thist)
@@ -54,7 +58,9 @@ for ic,config in enumerate(configs) :
         print "  ... Adding ", tmp.GetName(), tmp.Integral("")
     	nullhist.Add(tmp)
     nullc+=1
-   
+  if bkgtype_i==0 :totalbackground = nullhist.Clone()
+  else : totalbackground.Add(nullhist)
+
   nullhist = getNormalizedHist(nullhist)
   print "Nevents ", bkg, nullhist.Integral("width")
   nullhist.SetLineColor(1)
@@ -68,8 +74,11 @@ for ic,config in enumerate(configs) :
   totalc+=1
 
  thstack.Draw("histFsame")
- for sig in x.signals.keys():
+ totalsignal = 0
+ for sig_i,sig in enumerate(x.signals.keys()):
   tmp = di.Get(x.directory+"/"+sig)
+  if sig_i==0: totalsignal = tmp.Clone()
+  else: totalsignal.Add(tmp)
   tmp = getNormalizedHist(tmp)
   tmp.SetLineColor(x.signals[sig][1])
   tmp.SetLineWidth(3)
@@ -113,5 +122,6 @@ for ic,config in enumerate(configs) :
 #can.SaveAs("metdist.pdf")
  can.Draw()
  if len(configs) > 1: can.SaveAs("%s.pdf"%config)
+ print "Expected Significance ", calculateExpectedSignificance(totalsignal,totalbackground), " sigma"
 
 raw_input("Press enter")
