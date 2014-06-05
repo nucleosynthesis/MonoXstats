@@ -44,7 +44,7 @@ for ic,config in enumerate(configs) :
  thstack = r.THStack("bkg","backgroundstack")
  thstack.SetTitle("")
  totalbkg = 0; totalc=0
- print "Nevents ", data.GetName(), data.Integral("width")
+ print "	Nevents ", data.GetName(), data.Integral("width")
 
  totalbackground = 0
  for bkgtype_i,bkg in enumerate(x.key_order):
@@ -52,17 +52,17 @@ for ic,config in enumerate(configs) :
   for thist in x.backgrounds[bkg][0]:
     tmp = di.Get(x.directory+"/"+thist)
     if nullc == 0 : 	
-        print "Starting ", tmp.GetName(), tmp.Integral("")
+        #print "Starting ", tmp.GetName(), tmp.Integral("")
     	nullhist = tmp.Clone()
     else:
-        print "  ... Adding ", tmp.GetName(), tmp.Integral("")
+        #print "  ... Adding ", tmp.GetName(), tmp.Integral("")
     	nullhist.Add(tmp)
     nullc+=1
   if bkgtype_i==0 :totalbackground = nullhist.Clone()
   else : totalbackground.Add(nullhist)
 
   nullhist = getNormalizedHist(nullhist)
-  print "Nevents ", bkg, nullhist.Integral("width")
+  print "	Nevents ", bkg, nullhist.Integral("width")
   nullhist.SetLineColor(1)
   nullhist.SetLineWidth(2)
   nullhist.SetFillColor(x.backgrounds[bkg][1])
@@ -85,7 +85,7 @@ for ic,config in enumerate(configs) :
   x.signals[sig][2]=tmp.Clone()
   x.signals[sig][2].Draw("samehist")
   leg.AddEntry(x.signals[sig][2],x.signals[sig][0],"L")
-  print "Nevents ", tmp.GetName(), tmp.Integral("width")
+  print "	Nevents ", tmp.GetName(), tmp.Integral("width")
 
  data.SetMarkerColor(1)
  data.SetLineColor(1)
@@ -122,6 +122,6 @@ for ic,config in enumerate(configs) :
 #can.SaveAs("metdist.pdf")
  can.Draw()
  if len(configs) > 1: can.SaveAs("%s.pdf"%config)
- print "Expected Significance ", calculateExpectedSignificance(totalsignal,totalbackground), " sigma"
+ print "	Expected Significance ", calculateExpectedSignificance(totalsignal,totalbackground), " sigma"
 
 raw_input("Press enter")
