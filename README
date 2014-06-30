@@ -1,0 +1,22 @@
+Statistics/selection/fitting with MonoX Bacon search
+
+
+1) run skims ....
+  root -l skimMetFiles.C
+
+2) fit controls/corrections/systematics/histograms
+  root -l buildFullModel.C
+
+3) make plots from the workspace with 
+  python makePlot.py config1 config2 ....
+
+4) discover DM
+
+Alternate (better)
+  g++ skimMetFilesExec.cpp -I `root-config --incdir` `root-config --libs` -o skimMetFilesExec 
+and submit jobs with 
+  python baconBatch.py skimMetFilesExec Output_tree.root --args "0:[0,30,1]" -n NJOBS
+  python baconBatch.py --monitor sub -q 1nh
+
+Run the model building from python steering (configure categories with categories.py)
+  ./makeModel.py categories
