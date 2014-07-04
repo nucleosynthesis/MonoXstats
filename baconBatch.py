@@ -29,7 +29,7 @@ parser = OptionParser()
 parser = OptionParser(usage="usage: %prog analyzer outputfile [options] \nrun with --help to get list of options")
 parser.add_option("-d","--directory",default='',help="Pick up files from a particular directory. can also pass from /eos/. Will initiate split by files (note you must also pass which index the file goes to)")
 parser.add_option("-o","--outdir",default='bacon',help="output for analyzer. This will always be the output for job scripts.")
-parser.add_option("-a","--args",dest="args",default=[],action="append",help="Pass analyzer args n:arg")
+parser.add_option("-a","--args",dest="args",default=[],action="append",help="Pass executable args n:arg OR named arguments name:arg. Multiple args can be passed with <val1,val2...> or lists of integers with [min,max,stepsize]")
 parser.add_option("-v","--verbose",dest="verbose",default=False,action="store_true",help="Spit out more info")
 
 # Make batch submission scripts options
@@ -119,23 +119,34 @@ if options.monitor:
 def parse_to_dict(l_list):
   if len(l_list)<1: return {}
   ret = {}
+  nkey = 0
   for item in l_list: 
+    ni,varg = item.split(':') # should put a try here
+    if not '-' in ni: 
+    	ni = int(ni)
+	nkey+=1
     if not "[" in item and "<" not in item:
-     ni,varg = item.split(':') # should put a try here
-     ret[int(ni)]=[varg]
+     ret[(ni)]=['',[varg]]
     else :
-     ni,varg = item.split(':') # should put a try here
      if "[" in varg:
        varg = varg.replace("[","")
        varg = varg.replace("]","")
        min,max,step = varg.split(",")
-       ret[int(ni)] = arange(int(min),int(max),int(step))
+       ret[(ni)] = ['',arange(int(min),int(max),int(step))]
      elif "<" in varg:
        varg  = varg.replace("<","")
        varg  = varg.replace(">","")
        largs = varg.split(",")
-       ret[int(ni)] = largs
-
+       ret[(ni)] = ['',largs]
+  
+  iskey = 0
+  for kr in ret.keys():
+  	if type(kr)==type(''):
+		ll = ret.pop(kr)
+		
+		ll[1] = [kr+' '+str(l) for l in ll[1]] 
+		ret[nkey+iskey]=ll
+		iskey+=1
   return ret
 
 def getFilesJob(dir,job,njobs):
@@ -172,7 +183,7 @@ exec_line = '%s'%analyzer
 
 if options.directory :
   filepos,options.directory = options.directory.split(':')
-  analyzer_args[filepos]="fileinput"
+  analyzer_args[filepos]=['',"fileinput"]
 
 #for arg_i,arg in enumerate(default_args):
 #  if arg_i in analyzer_args.keys(): 
@@ -187,7 +198,7 @@ if len(sortedkeys): sortedkeys.sort()
 
 for key in sortedkeys:
 #  if arg_i in analyzer_args.keys(): 
-  	arg = analyzer_args[key]
+  	arg = analyzer_args[key][1]
 	if    len(arg)>1: 
 		mindeces.append(key)
 		exec_line+= ' MULTARG_%d '%key
@@ -207,12 +218,11 @@ if not options.dryRun and njobs > 1:
 for job_i in range(njobs):
  ################################ WHY does this need to be recreate?
  # This must be the sorted set of keys from the dictionary to build the iterations
- listoflists = [analyzer_args[k] for k in sortedkeys ]
+ listoflists = [analyzer_args[k][1] for k in sortedkeys ]
  #itertools section, make object containing all args to be considered
  #i.e it iterates over all combinations of arguments in the args list 
  iterationsobject = product(*listoflists)
  ################################
- 
  if options.directory:          files = getFilesJob(options.directory,job_i,njobs)
  else: files = getArgsJob(iterationsobject,job_i,njobs)# use itertools to split up any arglists into jobs 
  #else: files=[]
