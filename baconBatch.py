@@ -179,7 +179,7 @@ mindeces   = []
 analyzer   = args[0]
 outfile = args[1]
 analyzer_args = parse_to_dict(options.args)
-exec_line = '%s'%analyzer
+exec_line = './%s'%analyzer
 
 if options.directory :
   filepos,options.directory = options.directory.split(':')
