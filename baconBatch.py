@@ -8,6 +8,8 @@
 # For now assume output is small enough to store locally. 
 # ------------------------------------------------------------------------------------
 
+import ROOT as r
+
 import sys, commands, os, fnmatch
 from optparse import OptionParser
 from optparse import OptionGroup
@@ -31,6 +33,8 @@ parser.add_option("-d","--directory",default='',help="Pick up files from a parti
 parser.add_option("-o","--outdir",default='bacon',help="output for analyzer. This will always be the output for job scripts.")
 parser.add_option("-a","--args",dest="args",default=[],action="append",help="Pass executable args n:arg OR named arguments name:arg. Multiple args can be passed with <val1,val2...> or lists of integers with [min,max,stepsize]")
 parser.add_option("-v","--verbose",dest="verbose",default=False,action="store_true",help="Spit out more info")
+parser.add_option("","--passSumEntries",dest="passSumEntries",default="",help="x:treename Get Entries in TTree treename and pass to argument x")
+parser.add_option("","--blacklist",dest="blacklist",default=[],action="append",help="Add blacklist file types (search for this string in files and ignore them")
 
 # Make batch submission scripts options
 parser.add_option("-n","--njobs",dest="njobs",type='int',default=1,help="Split into n jobs, will automatically produce submission scripts")
@@ -53,9 +57,9 @@ def write_job(exec_line, out, analyzer, i, n):
 	sub_file.write('#!/bin/bash\n')
 	sub_file.write('# Job Number %d, running over %d files \n'%(i,n))
 	sub_file.write('touch %s.run\n'%os.path.abspath(sub_file.name))
-	#sub_file.write('cd %s\n'%os.getcwd())
-	#sub_file.write('eval `scramv1 runtime -sh`\n')
-	#sub_file.write('cd -\n')
+	sub_file.write('cd %s\n'%os.getcwd())
+	sub_file.write('eval `scramv1 runtime -sh`\n')
+	sub_file.write('cd -\n')
 	sub_file.write('mkdir -p scratch\n')
 	sub_file.write('cd scratch\n')
 	#sub_file.write('cp -p $CMSSW_BASE/bin/$SCRAM_ARCH/%s .\n'%analyzer)
@@ -99,20 +103,22 @@ if options.monitor:
     failjobs = []
     runjobs  = []
     donejobs = []
-
+    number_of_jobs = 0
     for root,dirs,files in os.walk(dir):
      for file in fnmatch.filter(files,'*.sh'):
-       if os.path.isfile('%s/%s.fail'%(root,file)): failjobs.append('%s'%file)
+       if os.path.isfile('%s/%s.fail'%(root,file)): failjobs.append('%s/%s'%(root,file))
        if os.path.isfile('%s/%s.done'%(root,file)):
-       		if not '%s.sh'%file in failjobs : donejobs.append('%s'%file)
-       if os.path.isfile('%s/%s.run'%(root,file)): runjobs.append('%s'%file)
+       		if not '%s.sh'%file in failjobs : donejobs.append('%s/%s'%(root,file))
+       if os.path.isfile('%s/%s.run'%(root,file)): runjobs.append('%s/%s'%(root,file))
+       number_of_jobs+=1
     print 'Status of jobs directory ', dir
+    print '  Total of %d jobs'%number_of_jobs 
     print '  %d in status Fail -> (resub them with --monitor resub)'%len(failjobs)
-    for job in failjobs : print '\t %s'%job
+    for job in failjobs : print '\t FAIL %s'%job
     print '  %d in status Running -> '%len(runjobs)
-    for job in runjobs : print '\t %s'%job
+    for job in runjobs : print '\t RUN %s'%job
     print '  %d in status Done -> '%len(donejobs)
-    for job in donejobs : print '\t %s'%job
+    for job in donejobs : print '\t DONE %s'%job
 
   sys.exit('Finished Monitor -- %s'%options.monitor)
 
@@ -149,13 +155,17 @@ def parse_to_dict(l_list):
 		iskey+=1
   return ret
 
-def getFilesJob(dir,job,njobs):
+def getFilesJob(dirin,job,njobs):
   if njobs == 1 : 
   	njobs = -1
 	job = 0
   infiles = []
-  if '/store/' in options.directory : infiles = makeCaFiles(options.directory,njobs,job)
-  else : infiles = makeFiles(options.directory,njobs,job)
+  if "," in dirin : alldirs = dirin.split(',')
+  else : alldirs=[dirin]
+  infiles = []
+  for dir in alldirs:
+    if '/store/' in dir : infiles.extend(makeCaFiles(dir,options.blacklist,njobs,job))
+    else : infiles.extend(makeFiles(dir,options.blacklist,njobs,job))
   if options.verbose: print "VERB -- Found following files for dir %s --> "%dir, infiles
   return infiles
 
@@ -179,11 +189,25 @@ mindeces   = []
 analyzer   = args[0]
 outfile = args[1]
 analyzer_args = parse_to_dict(options.args)
+if options.passSumEntries: 
+	pos,treenam = options.passSumEntries.split(":")
+	numEntries = 0
+	if options.directory : 
+		files = getFilesJob(options.directory.split(":")[1],0,-1)
+		for fi in files: 
+		  tf = r.TFile.Open(fi[0])
+		  try: 
+		   numEntries+=int(getattr(tf,treenam).GetEntries())
+		  except:
+		   numEntries+=0
+	else: numEntries = -1;
+	analyzer_args[int(pos)]=['',[int(numEntries)]]
+
 exec_line = './%s'%analyzer
 
 if options.directory :
   filepos,options.directory = options.directory.split(':')
-  analyzer_args[filepos]=['',"fileinput"]
+  analyzer_args[int(filepos)]=['',"fileinput"]
 
 #for arg_i,arg in enumerate(default_args):
 #  if arg_i in analyzer_args.keys(): 
@@ -199,7 +223,9 @@ if len(sortedkeys): sortedkeys.sort()
 for key in sortedkeys:
 #  if arg_i in analyzer_args.keys(): 
   	arg = analyzer_args[key][1]
-	if    len(arg)>1: 
+	if arg=='fileinput':
+		exec_line+= ' fileinput '
+	elif    len(arg)>1: 
 		mindeces.append(key)
 		exec_line+= ' MULTARG_%d '%key
 	else:  exec_line+=' %s '%arg[0]
@@ -213,7 +239,6 @@ print 'running executable -- (default call) \n\t%s'%exec_line
 
 if not options.dryRun and njobs > 1:
 	print 'Writing %d Submission Scripts to %s (submit after with --monitor sub)'%(njobs,options.outdir)
-
 
 for job_i in range(njobs):
  ################################ WHY does this need to be recreate?
@@ -235,8 +260,8 @@ for job_i in range(njobs):
    if not fil[1]: continue
    if options.directory: exec_line_i = exec_line.replace('fileinput'," "+fil[0]+" ")
    else: 
-   	exec_line_i = exec_line
-	for i,m in enumerate(fil[0]):  # no defaults so guarantee (make the check) that all of the args are there)  
+    exec_line_i = exec_line
+    for i,m in enumerate(fil[0]):  # no defaults so guarantee (make the check) that all of the args are there)  
 		exec_line_i = exec_line_i.replace(" MULTARG_%d "%i," "+str(m)+" " ) #LIST  OVER iterated arguments and produce and replace MULTIARG_i with arguemnt at i in list ?
    job_exec+=exec_line_i+'; mv %s %s/%s_job%d_file%d.root; '%(outfile,options.outdir,outfile,job_i,fil_i) 
    nfiles_i += 1
@@ -246,4 +271,6 @@ for job_i in range(njobs):
  	print 'job %d/%d -> '%(job_i+1,njobs), job_exec
  elif njobs > 1: 
    write_job(job_exec, options.outdir, analyzer, job_i, nfiles_i)
- else: os.system(job_exec) 
+ else: 
+ 	print "Running: ", job_exec
+ 	os.system(job_exec) 
