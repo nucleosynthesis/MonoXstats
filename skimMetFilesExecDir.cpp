@@ -86,12 +86,12 @@ void skim(std::string var, TTree *fullTree, TTree *newTree, std::string cutstr, 
 
   std::cout << " Filling Skim tree " << newTree->GetName() << std::endl;
 
-  float weight_in = gCrossSection/gNumberInSample;
+  float weight_in = luminosity/(gNumberInSample/gCrossSection);
 
   for (int evt=0;evt<nEntries;evt++){
     if ( !(keep_points->Contains(evt)) ) continue;
     fullTree->GetEntry(evt);
-    if (isWeighted) weight = weight_in*weight_in_pu*luminosity;
+    if (isWeighted) weight = weight_in*weight_in_pu;
     else weight = 1.;
     if (reweighted) { 
     	if (genpt<reweightgenpt->GetXaxis()->GetXmax() && genpt>reweightgenpt->GetXaxis()->GetXmin()) {

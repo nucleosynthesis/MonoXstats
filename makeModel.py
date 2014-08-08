@@ -10,8 +10,8 @@ config = sys.argv[1]
 x = __import__(config)
 
 # Make an output file 
-fout = ROOT.TFile("output_from_py.root","RECREATE")
-fin  = ROOT.TFile.Open("Output_skimtrees.root")
+fout = ROOT.TFile(x.outFileName,"RECREATE")
+fin  = ROOT.TFile.Open(x.inFileName)
 
 # load the library to get a model builder
 #ROOT.gROOT.ProcessLine(".L ./libModelBuilder.so")

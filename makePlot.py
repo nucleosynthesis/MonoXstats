@@ -1,11 +1,19 @@
 import sys
+from optparse import OptionParser
+
+parser = OptionParser()
+parser.add_option("-d","--tdir",default='',help="pick histos from a different directory (will be catgeory of course!)")
+parser.add_option("-b","--batch",default=False,action='store_true',help="always run in batch and save .pdf with config name instead of drawing canvas")
+(options,args) = parser.parse_args()
+
 import ROOT as r 
 r.gStyle.SetOptStat(0)
 
 r.gROOT.ProcessLine(".L statsCalc.h+");
 from ROOT import calculateExpectedSignificance 
+from ROOT import calculateExpectedLimit 
 
-fi = r.TFile.Open(sys.argv[1])
+fi = r.TFile.Open(args[0])
 di = fi #.Get("mjw_1jet")
 
 def getNormalizedHist(hist):
@@ -18,15 +26,19 @@ def getNormalizedHist(hist):
   thret.GetYaxis().SetTitle("Events/GeV")
   return thret
 
-configs = sys.argv[2:]
+configs = args[1:]
 canvs = []
 if len(configs) > 1:
   print "Moving to batch mode, will save pdfs as name of config"
+  options.batch = True
+
+if options.batch:
   r.gROOT.SetBatch(1)
 
 for ic,config in enumerate(configs) :
  print "Run Config", config
  x = __import__(config)
+ if options.tdir: x.directory = options.tdir
  data 	    = di.Get(x.directory+"/"+x.dataname)
  data 	    = getNormalizedHist(data)
  data.SetTitle("")
@@ -58,7 +70,9 @@ for ic,config in enumerate(configs) :
         #print "  ... Adding ", tmp.GetName(), tmp.Integral("")
     	nullhist.Add(tmp)
     nullc+=1
-  if bkgtype_i==0 :totalbackground = nullhist.Clone()
+  if bkgtype_i==0 :
+  	totalbackground = nullhist.Clone()
+	totalbackground.Sumw2();
   else : totalbackground.Add(nullhist)
 
   nullhist = getNormalizedHist(nullhist)
@@ -86,6 +100,11 @@ for ic,config in enumerate(configs) :
   x.signals[sig][2].Draw("samehist")
   leg.AddEntry(x.signals[sig][2],x.signals[sig][0],"L")
   print "	Nevents ", tmp.GetName(), tmp.Integral("width")
+
+ normtotalback = getNormalizedHist(totalbackground)
+ normtotalback.SetFillStyle(3005);
+ normtotalback.SetFillColor(1);
+ normtotalback.Draw("E2same");
 
  data.SetMarkerColor(1)
  data.SetLineColor(1)
@@ -121,7 +140,9 @@ for ic,config in enumerate(configs) :
  canvs.append(can)
 #can.SaveAs("metdist.pdf")
  can.Draw()
- if len(configs) > 1: can.SaveAs("%s.pdf"%config)
- print "	Expected Significance ", calculateExpectedSignificance(totalsignal,totalbackground), " sigma"
+ if totalsignal != 0 : print "	Expected Significance ", calculateExpectedSignificance(totalsignal,totalbackground), " sigma"
+ if totalsignal != 0 : print "	Expected Limit mu  <  ", calculateExpectedLimit(0.01,0.5,totalsignal,totalbackground)
+# if totalsignal.Integral()>0 : print "	Expected Significance (incbkg) ", calculateExpectedSignificance(totalsignal,totalbackground,1), " sigma"
+ if options.batch: can.SaveAs("%s_%s.pdf"%(config,options.tdir))
 
-raw_input("Press enter")
+if not options.batch:raw_input("Press enter")
