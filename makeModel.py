@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # make the mono-X workspaces for statistical analysis
-import sys
+import sys, array
 import ROOT
 
 if len(sys.argv)<2: sys.exit("Not enough arguments, pass configuration file")
@@ -29,10 +29,18 @@ for catid,cat in enumerate(x.categories): # loop over categories
   mb.xmin	    = float(x.categories[catid]["min"])
   mb.xmax	    = float(x.categories[catid]["max"])
 
-  histobase = ROOT.TH1F("base_%d"%catid,"base"
+  try: 
+    bins = x.categories[catid]["bins"]
+    histobase = ROOT.TH1F("base_%d"%catid,"base"
+        ,len(bins)-1
+	,array.array('d',bins))
+
+  except:
+    histobase = ROOT.TH1F("base_%d"%catid,"base"
   	,x.categories[catid]["nbins"]
   	,x.categories[catid]["min"]
   	,x.categories[catid]["max"])
+
   mb.lMet = histobase.Clone()  # ???
 
   mb.buildModel(fin,fdir);
@@ -40,5 +48,5 @@ for catid,cat in enumerate(x.categories): # loop over categories
   fdir.cd()
   cstr.Write()
 
-print "done!"
+print "done!, Model saved in -> ", fout.GetName()
 
